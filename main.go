@@ -1,29 +1,30 @@
 package main
 
-import "syahrultorrent/serialize"
+import (
+	"crypto/sha1"
+	"log"
+	"os"
+	"syahrultorrent/serialize"
+
+	"github.com/davecgh/go-spew/spew"
+)
 
 func main() {
-	t := &serialize.TorrentFile{}
-	workQueue := make(chan *pieceWork, len(t.PieceHashes))
-	results := make(chan *pieceResult)
-	for index, hash := range t.PieceHashes {
-		length := t.calculatePieceSize(index)
-		workQueue <- &pieceWork{index, hash, length}
+	// Lets open a bittorent file and the the correct bencodeTorrent struct
+	fileReader, err := os.Open("./files/debian-10.3.0-amd64-netinst.iso.torrent")
+	if err != nil {
+		log.Println(err)
 	}
-
-	// Start workers
-	for _, peer := range t.Peers {
-		go t.startDownloadWorker(peer, workQueue, results)
+	bencodeTorrent, err := serialize.Open(fileReader)
+	if err != nil {
+		log.Println(err)
 	}
-
-	// Collect results into a buffer until full
-	buf := make([]byte, t.Length)
-	donePieces := 0
-	for donePieces < len(t.PieceHashes) {
-		res := <-results
-		begin, end := t.calculateBoundsForPiece(res.index)
-		copy(buf[begin:end], res.buf)
-		donePieces++
+	torrentFile, err := bencodeTorrent.ToTorrentFile()
+	if err != nil {
+		log.Println(err)
 	}
-	close(workQueue)
+	// Generate a random peer id
+	peerID := sha1.Sum([]byte("Hello World!"))
+	res, err := torrentFile.RequestPeers(peerID, 8768)
+	spew.Dump(res)
 }
